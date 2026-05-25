@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Integrate and manage all your referral programs in one beautiful, dynamic space.">
+    <title>My Referral Hub</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-elements">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <main class="container">
+        <header>
+            <h1>My Referral Hub</h1>
+            <p>Share your links and start earning rewards.</p>
+        </header>
+
+        <div class="grid" id="referral-grid">
+            <!-- Cards will be injected via JS -->
+        </div>
+
+        <section class="form-section">
+            <h2>Add Referral App or Send Query</h2>
+            <p>Help us improve! Submit a referral program you'd like us to add, or send us any query you have.</p>
+            
+            <div id="form-feedback" class="form-feedback"></div>
+
+            <form id="submission-form" class="submission-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="submit-type">I want to...</label>
+                        <select id="submit-type" required>
+                            <option value="app-request" selected>Request a Referral App</option>
+                            <option value="query">Send a Query / Question</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="user-email">Email Address</label>
+                        <input type="email" id="user-email" placeholder="yourname@example.com" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="user-name">Your Name</label>
+                        <input type="text" id="user-name" placeholder="John Doe" required>
+                    </div>
+                    <!-- Dynamic field for App Name -->
+                    <div class="form-group" id="group-app-name">
+                        <label for="app-name">App Name</label>
+                        <input type="text" id="app-name" placeholder="e.g. Uber, Airbnb" required>
+                    </div>
+                </div>
+
+                <!-- Dynamic field for App Referral Link -->
+                <div class="form-group" id="group-app-link">
+                    <label for="app-link">Referral Link / Invitation Code (Optional)</label>
+                    <input type="url" id="app-link" placeholder="https://example.com/invite/123">
+                </div>
+
+                <!-- Dynamic field for Message (initially hidden) -->
+                <div class="form-group" id="group-message" style="display: none;">
+                    <label for="message">Your Message / Query</label>
+                    <textarea id="message" placeholder="Write your query or message here..."></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submit-form-btn">
+                        <span>Submit Request</span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- Submissions list -->
+            <div class="submissions-history" id="submissions-history" style="display: none;">
+                <h3>
+                    <span>My Requests & Queries</span>
+                    <button class="clear-history-btn" id="clear-submissions">Clear History</button>
+                </h3>
+                <div class="submission-list" id="submission-list">
+                    <!-- Dynamic submission items -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal for editing/copying links -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal-content">
+            <button class="close-btn" id="close-modal">&times;</button>
+            <div class="modal-header">
+                <img id="modal-icon" src="" alt="App Icon">
+                <h2 id="modal-title">App Name</h2>
+            </div>
+            <div class="input-group">
+                <label for="referral-link">Your Referral Link</label>
+                <input type="text" id="referral-link" placeholder="Paste your link here...">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="save-link">Save Link</button>
+                <button class="btn btn-secondary" id="copy-link">Copy Link</button>
+            </div>
+            <p id="feedback-msg" class="feedback-msg"></p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
