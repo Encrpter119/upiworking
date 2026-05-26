@@ -10,7 +10,7 @@ const apps = [
     {
         id: 'paytm',
         name: 'Paytm',
-        icon: 'https://upload.wikimedia.org/wikipedia/commons/2/24/Paytm_Logo_%28standalone%29.svg',
+        icon: 'paytmlogo.png',
         link: 'https://p.paytm.me/xCTH/l09z4k8v?utmt=052320',
         code: '7006780939',
         promoText: 'Get cashback on your first UPI transaction'
@@ -39,11 +39,55 @@ const apps = [
     },
     {
         id: 'superupi',
-        name: 'Super UPI',
-        icon: 'https://logo.clearbit.com/super.money',
-        link: ''
+        name: 'super.money',
+        icon: 'supermoney.jpg',
+        links: [
+            'https://link.super.money/fA3GYpgbyVb',
+            'https://link.super.money/ZsgcLKVBRZb',
+            'https://link.super.money/ZsgcLKVBRZb'
+        ],
+        readonly: true
+    },
+    {
+        id: 'slice',
+        name: 'slice',
+        icon: 'slice.png',
+        link: 'https://slice.bank.in/t?c=vv2GKIx&ic=MOHAM7011444',
+        code: '&MOHAM7011444',
+        promoText: 'Get cashback on your first UPI/credit payment',
+        readonly: true
     }
 ];
+
+// Deep clone of apps array to keep track of default links/codes
+const defaultApps = JSON.parse(JSON.stringify(apps));
+
+// Get referral code, prioritizing hardcoded default codes when the link is unchanged
+const getAppCode = (app, linkIndex = null) => {
+    if (app.links && linkIndex !== null) {
+        return extractReferralCode(app.links[linkIndex], app.id);
+    }
+    
+    const defaultApp = defaultApps.find(a => a.id === app.id);
+    
+    // If link matches the default, prioritize the default hardcoded code
+    if (defaultApp && app.link === defaultApp.link && defaultApp.code) {
+        return defaultApp.code;
+    }
+    
+    // Otherwise extract dynamically from user link
+    const extracted = extractReferralCode(app.link, app.id);
+    if (extracted) {
+        return extracted;
+    }
+    
+    // Fallback to default code if extraction fails
+    if (defaultApp && defaultApp.code) {
+        return defaultApp.code;
+    }
+    
+    return '';
+};
 
 // Load saved links from localStorage
 const loadSavedLinks = () => {
@@ -51,8 +95,15 @@ const loadSavedLinks = () => {
     if (saved) {
         const parsed = JSON.parse(saved);
         apps.forEach(app => {
-            if (parsed[app.id]) {
-                app.link = parsed[app.id];
+            if (app.readonly) return; // Read-only links should not be overwritten
+            if (parsed[app.id] !== undefined) {
+                if (app.links && Array.isArray(parsed[app.id])) {
+                    app.links = parsed[app.id];
+                } else if (app.links && typeof parsed[app.id] === 'string') {
+                    app.links[0] = parsed[app.id];
+                } else {
+                    app.link = parsed[app.id];
+                }
             }
         });
     }
@@ -62,7 +113,12 @@ const loadSavedLinks = () => {
 const saveLinks = () => {
     const linksToSave = {};
     apps.forEach(app => {
-        linksToSave[app.id] = app.link;
+        if (app.readonly) return; // Do not save read-only links to localStorage
+        if (app.links) {
+            linksToSave[app.id] = app.links;
+        } else {
+            linksToSave[app.id] = app.link;
+        }
     });
     localStorage.setItem('referralLinks', JSON.stringify(linksToSave));
 };
@@ -75,9 +131,7 @@ const modal = document.getElementById('modal');
 const closeModalBtn = document.getElementById('close-modal');
 const modalIcon = document.getElementById('modal-icon');
 const modalTitle = document.getElementById('modal-title');
-const linkInput = document.getElementById('referral-link');
 const saveBtn = document.getElementById('save-link');
-const copyBtn = document.getElementById('copy-link');
 const feedbackMsg = document.getElementById('feedback-msg');
 
 // Form elements
@@ -97,28 +151,145 @@ const submissionsHistory = document.getElementById('submissions-history');
 const submissionList = document.getElementById('submission-list');
 const clearSubmissionsBtn = document.getElementById('clear-submissions');
 
+const extractReferralCode = (urlStr, appId) => {
+    if (!urlStr) return '';
+    try {
+        const urlClean = urlStr.trim();
+        // If it's not a URL, it might just be the raw referral code itself
+        if (!urlClean.startsWith('http://') && !urlClean.startsWith('https://')) {
+            if (urlClean.length > 0 && urlClean.length <= 15 && !urlClean.includes('.') && !urlClean.includes('/')) {
+                let code = urlClean;
+                if (appId === 'slice' && !code.startsWith('&')) {
+                    code = '&' + code;
+                }
+                return code;
+            }
+            return '';
+        }
+        
+        const url = new URL(urlClean);
+        
+        // 1. Try to find code in common query parameters
+        const queryParams = ['ic', 'code', 'referralCode', 'referral_code', 'ref', 'r', 'invite', 'inviteCode', 'invite_code', 'c'];
+        for (const param of queryParams) {
+            let val = url.searchParams.get(param);
+            if (val) {
+                if (appId === 'slice' && !val.startsWith('&')) {
+                    val = '&' + val;
+                }
+                return val;
+            }
+        }
+        
+        // 2. Try to extract from path segments
+        const pathSegments = url.pathname.split('/').filter(seg => seg.length > 0);
+        if (pathSegments.length > 0) {
+            const lastSegment = pathSegments[pathSegments.length - 1];
+            
+            // Exclude generic words
+            const genericWords = ['app', 'invite', 'referral', 'download', 'share', 'signup', 'register', 'home', 'main'];
+            if (!genericWords.includes(lastSegment.toLowerCase())) {
+                let code = lastSegment;
+                if (lastSegment.toLowerCase().startsWith('invite-')) {
+                    code = lastSegment.substring(7);
+                }
+                if (appId === 'slice' && !code.startsWith('&')) {
+                    code = '&' + code;
+                }
+                return code;
+            }
+            
+            if (pathSegments.length > 1) {
+                const prevSegment = pathSegments[pathSegments.length - 2];
+                if (!genericWords.includes(prevSegment.toLowerCase())) {
+                    let code = prevSegment;
+                    if (appId === 'slice' && !code.startsWith('&')) {
+                        code = '&' + code;
+                    }
+                    return code;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Failed to parse URL for code extraction:', e);
+    }
+    return '';
+};
+
 const renderGrid = () => {
     grid.innerHTML = '';
     apps.forEach(app => {
         const card = document.createElement('div');
         card.className = 'card';
         card.onclick = () => {
-            if (app.link && app.link.trim() !== '') {
+            if (app.links) {
+                openModal(app);
+            } else if (app.link && app.link.trim() !== '') {
                 window.open(app.link, '_blank');
             } else {
                 openModal(app);
             }
         };
         
-        const hasLink = app.link && app.link.trim() !== '';
+        let hasLink = false;
+        let statusText = 'No Link Yet';
+        if (app.links) {
+            const addedCount = app.links.filter(l => l && l.trim() !== '').length;
+            if (addedCount > 0) {
+                statusText = `${addedCount}/3 Links Added`;
+                hasLink = true;
+            }
+        } else if (app.link && app.link.trim() !== '') {
+            statusText = 'Link Added';
+            hasLink = true;
+        }
         
-        let codeButtonHtml = '';
-        if (app.code) {
-            codeButtonHtml = `
-                <button class="card-code-btn" title="Click to copy code">
-                    <span class="code-value">Code: ${app.code}</span>
-                    <span class="code-promo">${app.promoText || 'Get rewards on signup'}</span>
+        // Extract referral codes dynamically
+        let codes = [];
+        if (app.links) {
+            // For multi-link apps (super.money), we do NOT render codes on the card,
+            // they are visible inside the modal popup when clicked.
+        } else {
+            const codeVal = getAppCode(app);
+            if (codeVal) {
+                codes.push({
+                    code: codeVal,
+                    label: 'Code',
+                    promoText: app.promoText || 'Get rewards on signup'
+                });
+            }
+        }
+        
+        let codeButtonsHtml = '';
+        if (codes.length > 0) {
+            codeButtonsHtml = `<div class="card-codes-container">`;
+            codes.forEach(c => {
+                codeButtonsHtml += `
+                    <button class="card-code-btn" title="Click to copy code" data-code="${c.code}">
+                        <span class="code-value">${c.label}: ${c.code}</span>
+                        <span class="code-promo">${c.promoText}</span>
+                    </button>
+                `;
+            });
+            codeButtonsHtml += `</div>`;
+        }
+        
+        let viewLinksButtonHtml = '';
+        if (app.links) {
+            viewLinksButtonHtml = `
+                <button class="card-view-links-btn">
+                    View Links
                 </button>
+            `;
+        }
+        
+        let bottomContentHtml = '';
+        if (codeButtonsHtml || viewLinksButtonHtml) {
+            bottomContentHtml = `
+                <div class="card-bottom-wrapper">
+                    ${codeButtonsHtml}
+                    ${viewLinksButtonHtml}
+                </div>
             `;
         }
         
@@ -128,31 +299,33 @@ const renderGrid = () => {
             </div>
             <h2 class="card-title">${app.name}</h2>
             <span class="card-status ${hasLink ? 'active' : ''}">
-                ${hasLink ? 'Link Added' : 'No Link Yet'}
+                ${statusText}
             </span>
-            ${codeButtonHtml}
+            ${bottomContentHtml}
         `;
         
-        if (app.code) {
-            const codeBtn = card.querySelector('.card-code-btn');
-            codeBtn.onclick = (e) => {
+        // Bind copy click listeners to dynamically created code buttons
+        const codeBtns = card.querySelectorAll('.card-code-btn');
+        codeBtns.forEach(btn => {
+            btn.onclick = (e) => {
                 e.stopPropagation();
-                navigator.clipboard.writeText(app.code).then(() => {
-                    const originalHtml = codeBtn.innerHTML;
-                    codeBtn.innerHTML = `
+                const codeVal = btn.getAttribute('data-code');
+                navigator.clipboard.writeText(codeVal).then(() => {
+                    const originalHtml = btn.innerHTML;
+                    btn.innerHTML = `
                         <span class="code-value" style="color: #065f46;">Copied!</span>
                         <span class="code-promo" style="color: #065f46;">Code copied to clipboard</span>
                     `;
-                    codeBtn.style.borderColor = '#059669';
-                    codeBtn.style.background = '#d1fae5';
+                    btn.style.borderColor = '#059669';
+                    btn.style.background = '#d1fae5';
                     setTimeout(() => {
-                        codeBtn.innerHTML = originalHtml;
-                        codeBtn.style.borderColor = '';
-                        codeBtn.style.background = '';
+                        btn.innerHTML = originalHtml;
+                        btn.style.borderColor = '';
+                        btn.style.background = '';
                     }, 2000);
                 });
             };
-        }
+        });
         
         grid.appendChild(card);
     });
@@ -162,12 +335,159 @@ const openModal = (app) => {
     currentEditingApp = app;
     modalIcon.src = app.icon;
     modalTitle.textContent = app.name;
-    linkInput.value = app.link || '';
     feedbackMsg.textContent = '';
+    
+    const modalBody = document.getElementById('modal-body');
+    modalBody.innerHTML = '';
+    
+    // Set the save/close button text appropriately to Close since editing is disabled
+    saveBtn.textContent = 'Close';
+    
+    if (app.links) {
+        // App has multiple links
+        const labels = ['super card Referral Link (Link 1)', '5 registrations Referral Link (Link 2)', 'UPI Referral Link (Link 3)'];
+        app.links.forEach((linkVal, index) => {
+            const group = document.createElement('div');
+            group.className = 'input-group';
+            const codeVal = getAppCode(app, index);
+            
+            group.innerHTML = `
+                <label for="referral-link-${index}">${labels[index] || `Referral Link ${index + 1}`}</label>
+                <div class="input-with-actions">
+                    <input type="text" id="referral-link-${index}" value="${linkVal || ''}" placeholder="Link ${index + 1}" readonly style="color: var(--text-secondary); background: #e2e8f0; cursor: not-allowed;">
+                    ${codeVal ? `
+                    <button class="icon-btn copy-code-btn" title="Copy Code: ${codeVal}" type="button" data-code="${codeVal}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                    </button>
+                    ` : ''}
+                    <button class="icon-btn copy-btn" title="Copy Link" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                    <button class="icon-btn open-btn" title="Open Link" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    </button>
+                </div>
+                ${codeVal ? `
+                <div class="modal-code-info" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    Referral Code: <strong style="color: var(--accent); font-family: monospace; font-size: 0.95rem;">${codeVal}</strong>
+                </div>
+                ` : ''}
+            `;
+            
+            const copyBtn = group.querySelector('.copy-btn');
+            copyBtn.onclick = () => {
+                const input = group.querySelector('input');
+                const val = input.value.trim();
+                if (val) {
+                    navigator.clipboard.writeText(val).then(() => {
+                        showFeedback(`Link ${index + 1} copied to clipboard!`);
+                    }).catch(() => {
+                        showFeedback('Failed to copy', true);
+                    });
+                } else {
+                    showFeedback(`No Link ${index + 1} to copy`, true);
+                }
+            };
+            
+            const openBtn = group.querySelector('.open-btn');
+            openBtn.onclick = () => {
+                const input = group.querySelector('input');
+                const val = input.value.trim();
+                if (val) {
+                    window.open(val, '_blank');
+                } else {
+                    showFeedback(`No Link ${index + 1} to open`, true);
+                }
+            };
+            
+            const copyCodeBtn = group.querySelector('.copy-code-btn');
+            if (copyCodeBtn) {
+                copyCodeBtn.onclick = () => {
+                    navigator.clipboard.writeText(codeVal).then(() => {
+                        showFeedback('Code copied to clipboard!');
+                    }).catch(() => {
+                        showFeedback('Failed to copy', true);
+                    });
+                };
+            }
+            
+            modalBody.appendChild(group);
+        });
+    } else {
+        // Single link app
+        const group = document.createElement('div');
+        group.className = 'input-group';
+        const codeVal = getAppCode(app);
+        
+        group.innerHTML = `
+            <label for="referral-link">Your Referral Link</label>
+            <div class="input-with-actions">
+                <input type="text" id="referral-link" value="${app.link || ''}" placeholder="Link" readonly style="color: var(--text-secondary); background: #e2e8f0; cursor: not-allowed;">
+                ${codeVal ? `
+                <button class="icon-btn copy-code-btn" title="Copy Code: ${codeVal}" type="button" data-code="${codeVal}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                </button>
+                ` : ''}
+                <button class="icon-btn copy-btn" title="Copy Link" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+                <button class="icon-btn open-btn" title="Open Link" type="button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                </button>
+            </div>
+            ${codeVal ? `
+            <div class="modal-code-info" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                Referral Code: <strong style="color: var(--accent); font-family: monospace; font-size: 0.95rem;">${codeVal}</strong>
+            </div>
+            ` : ''}
+        `;
+        
+        const copyBtn = group.querySelector('.copy-btn');
+        copyBtn.onclick = () => {
+            const input = group.querySelector('input');
+            const val = input.value.trim();
+            if (val) {
+                navigator.clipboard.writeText(val).then(() => {
+                    showFeedback('Link copied to clipboard!');
+                }).catch(() => {
+                    showFeedback('Failed to copy', true);
+                });
+            } else {
+                showFeedback('No link to copy', true);
+            }
+        };
+        
+        const openBtn = group.querySelector('.open-btn');
+        openBtn.onclick = () => {
+            const input = group.querySelector('input');
+            const val = input.value.trim();
+            if (val) {
+                window.open(val, '_blank');
+            } else {
+                showFeedback('No link to open', true);
+            }
+        };
+        
+        const copyCodeBtn = group.querySelector('.copy-code-btn');
+        if (copyCodeBtn) {
+            copyCodeBtn.onclick = () => {
+                navigator.clipboard.writeText(codeVal).then(() => {
+                    showFeedback('Code copied to clipboard!');
+                }).catch(() => {
+                    showFeedback('Failed to copy', true);
+                });
+            };
+        }
+        
+        modalBody.appendChild(group);
+    }
+    
     modal.classList.add('active');
     
-    // Focus input with a slight delay for transition
-    setTimeout(() => linkInput.focus(), 100);
+    const firstInput = modalBody.querySelector('input');
+    if (firstInput) {
+        setTimeout(() => firstInput.focus(), 100);
+    }
 };
 
 const closeModal = () => {
@@ -330,27 +650,7 @@ modal.addEventListener('click', (e) => {
     if (e.target === modal) closeModal();
 });
 
-saveBtn.addEventListener('click', () => {
-    if (currentEditingApp) {
-        currentEditingApp.link = linkInput.value.trim();
-        saveLinks();
-        renderGrid();
-        showFeedback('Link saved successfully!');
-    }
-});
-
-copyBtn.addEventListener('click', () => {
-    const link = linkInput.value.trim();
-    if (link) {
-        navigator.clipboard.writeText(link).then(() => {
-            showFeedback('Link copied to clipboard!');
-        }).catch(err => {
-            showFeedback('Failed to copy', true);
-        });
-    } else {
-        showFeedback('No link to copy', true);
-    }
-});
+saveBtn.addEventListener('click', closeModal);
 
 const showFeedback = (msg, isError = false) => {
     feedbackMsg.textContent = msg;
